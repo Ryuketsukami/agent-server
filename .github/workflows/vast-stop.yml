@@ -1,0 +1,24 @@
+name: Vast.ai — Stop instance
+
+on:
+  schedule:
+    # 05:00 PM Israel time (GMT+2), Sunday through Thursday
+    - cron: "0 15 * * 0-4"
+  workflow_dispatch:  # allow manual stop from GitHub UI
+
+jobs:
+  stop:
+    name: Stop Vast.ai GPU instance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install vastai CLI
+        run: pip install vastai --quiet
+
+      - name: Stop instance
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          VAST_INSTANCE_ID: ${{ secrets.VAST_INSTANCE_ID }}
+        run: |
+          vastai set api-key "$VAST_API_KEY"
+          vastai stop instance "$VAST_INSTANCE_ID"
+          echo "Instance $VAST_INSTANCE_ID stopped."

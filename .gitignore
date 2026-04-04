@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment
+.env
+*.env.local
+
+# LangGraph Server
+.langgraph_cache/
+langgraph.store/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
