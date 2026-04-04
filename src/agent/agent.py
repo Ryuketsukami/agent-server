@@ -49,11 +49,21 @@ class ReactAgent:
         """
         self._config: ModelConfig = config or load_config()
 
+        # OpenRouter requires HTTP-Referer and X-Title headers to identify the
+        # app in their dashboard and enforce per-app rate limits.  These headers
+        # are no-ops for Ollama (self-hosted) deployments.
+        extra_headers: dict[str, str] = {}
+        if self._config.openrouter_referer:
+            extra_headers["HTTP-Referer"] = self._config.openrouter_referer
+        if self._config.openrouter_title:
+            extra_headers["X-Title"] = self._config.openrouter_title
+
         self._llm = ChatOpenAI(
             model=self._config.model_name,
             base_url=self._config.base_url,
             api_key=self._config.api_key,
             streaming=True,
+            default_headers=extra_headers or None,
         )
 
         self._tools = [web_search]

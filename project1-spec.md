@@ -89,10 +89,11 @@ Each column header shows:
 
 ### Concurrent Sessions Display
 Each server-based column (Local, Vast.ai, API) shows a live concurrent sessions count in the column header:
-- Fetched via `GET /info` on the LangGraph server (`/runs/active` count)
+- Fetched via `GET /runs?status=pending` on the LangGraph server
 - Updates every 10s while the column is online
 - Display: `N active session(s)` — helps users understand why inference is slower
 - Shown as a subtle badge below the column status indicator
+- LangGraph dev server exposes `/runs` — filter by `status=pending` or `status=running` for active count
 
 ### Summary Bar
 Shown after all columns finish:

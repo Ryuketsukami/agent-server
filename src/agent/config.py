@@ -19,6 +19,10 @@ class ModelConfig:
         api_key:                API key.  Use ``"ollama"`` for self-hosted.
         cost_per_input_token:   USD cost per input token.  0.0 for self-hosted.
         cost_per_output_token:  USD cost per output token.  0.0 for self-hosted.
+        openrouter_referer:     HTTP-Referer sent to OpenRouter for attribution.
+                                Ignored for Ollama deployments.
+        openrouter_title:       X-Title sent to OpenRouter for attribution.
+                                Ignored for Ollama deployments.
     """
 
     base_url: str
@@ -26,6 +30,8 @@ class ModelConfig:
     api_key: str
     cost_per_input_token: float
     cost_per_output_token: float
+    openrouter_referer: str
+    openrouter_title: str
 
 
 def load_config() -> ModelConfig:
@@ -34,11 +40,14 @@ def load_config() -> ModelConfig:
     Required:
         MODEL_BASE_URL   — OpenAI-compatible API base URL.
         MODEL_NAME       — Model identifier passed to the API.
-        MODEL_API_KEY    — API key (``"ollama"`` for local/Vast.ai).
+        MODEL_API_KEY    — API key (``"ollama"`` for local/Vast.ai;
+                          ``sk-or-...`` for OpenRouter).
 
     Optional:
         COST_PER_INPUT_TOKEN   — Float USD per input token.  Default ``0.0``.
         COST_PER_OUTPUT_TOKEN  — Float USD per output token.  Default ``0.0``.
+        OPENROUTER_REFERER     — HTTP-Referer for OpenRouter attribution.
+        OPENROUTER_TITLE       — X-Title for OpenRouter attribution.
 
     Raises:
         KeyError: If any required environment variable is absent.
@@ -49,4 +58,6 @@ def load_config() -> ModelConfig:
         api_key=os.environ["MODEL_API_KEY"],
         cost_per_input_token=float(os.environ.get("COST_PER_INPUT_TOKEN", "0.0")),
         cost_per_output_token=float(os.environ.get("COST_PER_OUTPUT_TOKEN", "0.0")),
+        openrouter_referer=os.environ.get("OPENROUTER_REFERER", ""),
+        openrouter_title=os.environ.get("OPENROUTER_TITLE", ""),
     )
