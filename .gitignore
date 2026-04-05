@@ -20,9 +20,11 @@ env/
 htmlcov/
 .tox/
 
-# Environment
+# Environment — never commit files with real secrets
 .env
-*.env.local
+.env.local
+# The .env.*.example files ARE committed (they're templates, no real keys)
+# If you copy one to .env, it's covered by the .env rule above
 
 # LangGraph Server
 .langgraph_cache/
