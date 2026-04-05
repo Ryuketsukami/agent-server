@@ -14,8 +14,7 @@ _MAX_ATTEMPTS: int = 3
 _RETRY_DELAY_SEC: float = 1.0
 
 
-@tool
-def web_search(query: str) -> str:
+def _web_search(query: str) -> str:
     """Search the web using DuckDuckGo and return clean Markdown text.
 
     Retries up to three times with a 1-second back-off on rate limit errors.
@@ -58,3 +57,8 @@ def web_search(query: str) -> str:
 
     # Unreachable — loop above always returns or exhausts retries
     return "Search failed after all retries."
+
+
+# LangChain tool wrapper consumed by the ReactAgent.
+# Tests call _web_search() directly to avoid the tool wrapper's type ambiguity.
+web_search = tool(_web_search)

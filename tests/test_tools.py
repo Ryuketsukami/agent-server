@@ -1,16 +1,19 @@
-"""Tests for the web_search tool."""
+"""Tests for the web_search tool implementation."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from src.agent.tools import web_search
+# Test the raw implementation function, not the LangChain tool wrapper.
+# This avoids type-checker ambiguity around @tool's return type and keeps
+# tests focused on the search logic rather than the LangChain plumbing.
+from src.agent.tools import _web_search
 
 
 class TestWebSearch:
-    """Unit tests for the DuckDuckGo web_search tool."""
+    """Unit tests for the DuckDuckGo _web_search implementation."""
 
     def test_returns_markdown_on_success(self) -> None:
         """Successful search returns a non-empty markdown string."""
@@ -20,7 +23,7 @@ class TestWebSearch:
         ]
         with patch("src.agent.tools.DDGS") as MockDDGS:
             MockDDGS.return_value.text.return_value = mock_results
-            result = web_search.invoke({"query": "what is langgraph"})
+            result = _web_search("what is langgraph")
 
         assert isinstance(result, str)
         assert len(result) > 0
@@ -29,9 +32,17 @@ class TestWebSearch:
         """Empty result list returns the no-results sentinel string."""
         with patch("src.agent.tools.DDGS") as MockDDGS:
             MockDDGS.return_value.text.return_value = []
-            result = web_search.invoke({"query": "xyzzy nonsense query 12345"})
+            result = _web_search("xyzzy nonsense query 12345")
 
         assert "No results found" in result
+
+    def test_returns_no_body_message_when_bodies_empty(self) -> None:
+        """Results with no 'body' fields return the no-readable-text sentinel."""
+        with patch("src.agent.tools.DDGS") as MockDDGS:
+            MockDDGS.return_value.text.return_value = [{"title": "Page"}]
+            result = _web_search("test")
+
+        assert "no readable text" in result.lower()
 
     def test_retries_on_rate_limit_then_succeeds(self) -> None:
         """Tool retries on DuckDuckGoSearchException and returns result on retry."""
@@ -48,9 +59,10 @@ class TestWebSearch:
             return mock_results
 
         with patch("src.agent.tools.DDGS") as MockDDGS:
-            with patch("src.agent.tools.time.sleep"):  # skip delay in tests
+            with patch("src.agent.tools.time") as mock_time:
+                mock_time.sleep = lambda _: None  # skip actual delay
                 MockDDGS.return_value.text.side_effect = side_effect
-                result = web_search.invoke({"query": "test query"})
+                result = _web_search("test query")
 
         assert "Retry succeeded" in result
         assert call_count == 2
@@ -60,11 +72,12 @@ class TestWebSearch:
         from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
         with patch("src.agent.tools.DDGS") as MockDDGS:
-            with patch("src.agent.tools.time.sleep"):
+            with patch("src.agent.tools.time") as mock_time:
+                mock_time.sleep = lambda _: None
                 MockDDGS.return_value.text.side_effect = DuckDuckGoSearchException(
                     "persistent rate limit"
                 )
-                result = web_search.invoke({"query": "test"})
+                result = _web_search("test")
 
         assert "temporarily unavailable" in result.lower()
 
@@ -72,18 +85,31 @@ class TestWebSearch:
         """Unexpected exceptions are caught and returned as error strings."""
         with patch("src.agent.tools.DDGS") as MockDDGS:
             MockDDGS.return_value.text.side_effect = RuntimeError("network error")
-            result = web_search.invoke({"query": "test"})
+            result = _web_search("test")
 
         assert "Unexpected search error" in result
 
     def test_skips_results_with_no_body(self) -> None:
-        """Results missing the 'body' key are excluded from output."""
+        """Results missing the 'body' key are excluded; valid bodies are kept."""
         mock_results = [
-            {"title": "Page 1"},  # no body
+            {"title": "Page 1"},       # no body — should be excluded
             {"body": "Valid content here."},
         ]
         with patch("src.agent.tools.DDGS") as MockDDGS:
             MockDDGS.return_value.text.return_value = mock_results
-            result = web_search.invoke({"query": "test"})
+            result = _web_search("test")
 
         assert "Valid content here" in result
+
+    def test_concatenates_multiple_bodies(self) -> None:
+        """Multiple result bodies are joined and all content appears in output."""
+        mock_results = [
+            {"body": "First result content."},
+            {"body": "Second result content."},
+        ]
+        with patch("src.agent.tools.DDGS") as MockDDGS:
+            MockDDGS.return_value.text.return_value = mock_results
+            result = _web_search("test")
+
+        assert "First result content" in result
+        assert "Second result content" in result

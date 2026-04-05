@@ -8,7 +8,7 @@ from typing import Literal
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
-from langgraph.graph.graph import CompiledGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from .config import ModelConfig, load_config
@@ -70,7 +70,7 @@ class ReactAgent:
         self._llm_with_tools = self._llm.bind_tools(self._tools)
         self._tool_node = ToolNode(self._tools)
 
-        self._graph: CompiledGraph = self._build_graph()
+        self._graph: CompiledStateGraph = self._build_graph()
 
     # ------------------------------------------------------------------ #
     #  Graph nodes                                                         #
@@ -178,7 +178,7 @@ class ReactAgent:
     #  Graph construction                                                  #
     # ------------------------------------------------------------------ #
 
-    def _build_graph(self) -> CompiledGraph:
+    def _build_graph(self) -> CompiledStateGraph:
         """Assemble and compile the ReAct StateGraph.
 
         Graph topology::
@@ -214,6 +214,6 @@ class ReactAgent:
     # ------------------------------------------------------------------ #
 
     @property
-    def graph(self) -> CompiledGraph:
+    def graph(self) -> CompiledStateGraph:
         """Compiled graph consumed by LangGraph Server via ``langgraph.json``."""
         return self._graph
