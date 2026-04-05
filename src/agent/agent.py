@@ -7,6 +7,7 @@ from typing import Literal
 
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
@@ -61,7 +62,7 @@ class ReactAgent:
         self._llm = ChatOpenAI(
             model=self._config.model_name,
             base_url=self._config.base_url,
-            api_key=self._config.api_key,
+            api_key=SecretStr(self._config.api_key),
             streaming=True,
             default_headers=extra_headers or None,
         )
