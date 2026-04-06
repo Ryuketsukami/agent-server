@@ -12,6 +12,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
+
 from .config import ModelConfig, load_config
 from .metrics import build_metrics_payload
 from .state import AgentState
@@ -31,24 +33,41 @@ class ReactAgent:
     The compiled graph is exposed via the ``graph`` property and registered
     in ``langgraph.json`` so LangGraph Server can serve and stream it.
 
+    Memory:
+        Pass a ``checkpointer`` to enable per-thread conversation memory.
+        The LangGraph Server thread API (``/threads/{id}/runs/stream``)
+        uses the checkpointer to persist messages across requests.
+
     Concurrency note:
         All timing and token data live in ``AgentState`` (per-request dict),
         not on ``self``.  Multiple concurrent requests are fully isolated.
 
     Example::
 
-        agent = ReactAgent()
-        result = agent.graph.invoke({"messages": [("user", "What is LangGraph?")]})
+        from langgraph.checkpoint.memory import MemorySaver
+        agent = ReactAgent(checkpointer=MemorySaver())
+        config = {"configurable": {"thread_id": "session-1"}}
+        result = agent.graph.invoke(
+            {"messages": [("user", "What is LangGraph?")]}, config
+        )
     """
 
-    def __init__(self, config: ModelConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: ModelConfig | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
+    ) -> None:
         """Initialise the agent.
 
         Args:
-            config: Pre-loaded ``ModelConfig``.  If ``None``, calls
-                    ``load_config()`` to read from environment variables.
+            config:       Pre-loaded ``ModelConfig``.  If ``None``, calls
+                          ``load_config()`` to read from environment variables.
+            checkpointer: LangGraph checkpointer for per-thread memory.
+                          ``MemorySaver`` for development; ``PostgresSaver``
+                          for production.  ``None`` disables memory.
         """
         self._config: ModelConfig = config or load_config()
+        self._checkpointer = checkpointer
 
         # OpenRouter requires HTTP-Referer and X-Title headers to identify the
         # app in their dashboard and enforce per-app rate limits.  These headers
@@ -208,7 +227,7 @@ class ReactAgent:
         builder.add_edge("tools", "agent")
         builder.add_edge("finalize", END)
 
-        return builder.compile()
+        return builder.compile(checkpointer=self._checkpointer)
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #

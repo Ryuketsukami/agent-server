@@ -13,7 +13,6 @@ RUN pip install --no-cache-dir -e .
 # Copy source
 COPY src/ ./src/
 COPY langgraph.json .
-COPY .env .env
 
 EXPOSE 8123
 
