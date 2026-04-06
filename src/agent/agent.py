@@ -12,8 +12,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
-from langgraph.checkpoint.base import BaseCheckpointSaver
-
 from .config import ModelConfig, load_config
 from .metrics import build_metrics_payload
 from .state import AgentState
@@ -55,19 +53,14 @@ class ReactAgent:
     def __init__(
         self,
         config: ModelConfig | None = None,
-        checkpointer: BaseCheckpointSaver | None = None,
     ) -> None:
         """Initialise the agent.
 
         Args:
-            config:       Pre-loaded ``ModelConfig``.  If ``None``, calls
-                          ``load_config()`` to read from environment variables.
-            checkpointer: LangGraph checkpointer for per-thread memory.
-                          ``MemorySaver`` for development; ``PostgresSaver``
-                          for production.  ``None`` disables memory.
+            config: Pre-loaded ``ModelConfig``.  If ``None``, calls
+                    ``load_config()`` to read from environment variables.
         """
         self._config: ModelConfig = config or load_config()
-        self._checkpointer = checkpointer
 
         # OpenRouter requires HTTP-Referer and X-Title headers to identify the
         # app in their dashboard and enforce per-app rate limits.  These headers
@@ -227,7 +220,7 @@ class ReactAgent:
         builder.add_edge("tools", "agent")
         builder.add_edge("finalize", END)
 
-        return builder.compile(checkpointer=self._checkpointer)
+        return builder.compile()
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #
