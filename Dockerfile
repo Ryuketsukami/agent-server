@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -e .
 # Copy source
 COPY src/ ./src/
 COPY langgraph.json .
+RUN touch .env
 
 EXPOSE 8123
 
