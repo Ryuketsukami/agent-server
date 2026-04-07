@@ -34,8 +34,10 @@ def main():
         "LANGGRAPH_DISABLE_FILE_PERSISTENCE": "false",
         "LANGGRAPH_ALLOW_BLOCKING": "false",
         "ALLOW_PRIVATE_NETWORK": "true",
-        # langgraph_api.config reads DATABASE_URI at import time even in inmem mode
-        "DATABASE_URI": "",
+        # langgraph_api.config reads these at import time even in inmem mode.
+        # They're unused by the inmem runtime — just need to exist.
+        "DATABASE_URI": "placeholder://inmem",
+        "REDIS_URI": "placeholder://inmem",
     }
 
     for key, value in env_patch.items():
