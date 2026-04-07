@@ -15,8 +15,6 @@ COPY src/ ./src/
 COPY langgraph.json .
 RUN touch .env
 
-EXPOSE 8123
-
 # Railway injects $PORT; default to 2024 (langgraph default).
 # --host 0.0.0.0 makes the server reachable outside the container.
 # --no-reload disables file watching (unnecessary in production container).
