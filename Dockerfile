@@ -19,9 +19,7 @@ EXPOSE 8123
 # Railway injects $PORT; default to 8123 for local docker run.
 # --no-browser skips opening a browser tab (not meaningful in a container).
 # --host 0.0.0.0 makes the server reachable outside the container.
-# --max-concurrent-runs matches OLLAMA_NUM_PARALLEL on the model server.
 CMD sh -c "langgraph dev \
     --port ${PORT:-8123} \
     --host 0.0.0.0 \
-    --no-browser \
-    --max-concurrent-runs ${MAX_CONCURRENT_RUNS:-3}"
+    --no-browser"
