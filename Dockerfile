@@ -17,10 +17,10 @@ RUN touch .env
 
 EXPOSE 8123
 
-# Railway injects $PORT; default to 8123 for local docker run.
-# --no-browser skips opening a browser tab (not meaningful in a container).
+# Railway injects $PORT; default to 2024 (langgraph default).
 # --host 0.0.0.0 makes the server reachable outside the container.
+# --no-reload disables file watching (unnecessary in production container).
 CMD sh -c "langgraph dev \
-    --port ${PORT:-8123} \
+    --port ${PORT:-2024} \
     --host 0.0.0.0 \
-    --no-browser"
+    --no-reload"
