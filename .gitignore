@@ -29,6 +29,7 @@ htmlcov/
 # LangGraph Server
 .langgraph_cache/
 langgraph.store/
+*.pckl
 
 # IDE
 .vscode/
