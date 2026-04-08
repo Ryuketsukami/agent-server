@@ -37,6 +37,8 @@ start_timing ──→ agent ──┬──▶ [tool call]    ──▶ tools �
                          └──▶ [final answer] ──▶ finalize ──▶ END
 ```
 
+The `agent` node includes a system prompt that guides the LLM to follow a clean Thought → Action → Observation → Answer loop, limiting searches to at most 2 per query to prevent excessive iterations.
+
 Each node streams to the browser. The `finalize` node emits a trailing `metrics` SSE event:
 
 ```json
@@ -59,12 +61,12 @@ Each node streams to the browser. The `finalize` node emits a trailing `metrics`
 agent-server/
 ├── src/
 │   └── agent/
-│       ├── agent.py      # ReactAgent class — graph construction
+│       ├── agent.py      # ReactAgent class — graph construction + system prompt
 │       ├── config.py     # ModelConfig dataclass, load_config()
 │       ├── graph.py      # Module-level `graph` export for langgraph.json
 │       ├── metrics.py    # build_metrics_payload() — pure computation
 │       ├── state.py      # AgentState TypedDict
-│       └── tools.py      # web_search tool (DuckDuckGo + Markdownify)
+│       └── tools.py      # web_search tool (DuckDuckGo + Markdownify, session reuse)
 ├── tests/
 │   ├── conftest.py       # adds src/ to sys.path
 │   ├── test_agent.py
@@ -225,6 +227,20 @@ Get your key at [openrouter.ai](https://openrouter.ai) → Keys.
 #### Rate limits
 
 OpenRouter applies rate limits per key (typically 60 req/min on free tier, higher on paid). The server is capped at 3 concurrent runs (`MAX_CONCURRENT_RUNS=3`), which is well within free-tier limits for a portfolio demo. If you hit limits, configure them in the OpenRouter dashboard and raise `MAX_CONCURRENT_RUNS` accordingly.
+
+---
+
+## SSE Streaming Format
+
+When the frontend proxies a query via `/threads/{id}/runs/stream` with `stream_mode: 'messages'`, LangGraph Server emits these SSE events:
+
+| Event | Data format | When |
+|---|---|---|
+| `messages/metadata` | `{msgId: {"metadata": {"langgraph_node": "agent", ...}}}` | Once per new message, before streaming starts |
+| `messages/partial` | `[accumulated_chunk]` (single-element array) | Each streaming token chunk from the `agent` node |
+| `messages/complete` | `[full_message]` (single-element array) | Non-streamed messages from `tools` and `finalize` nodes |
+
+**Important**: AIMessages from the `agent` node are always streamed as `messages/partial` events (never `messages/complete`). The frontend must detect message boundaries (via metadata events or ID changes) to commit partial messages as completed steps.
 
 ---
 

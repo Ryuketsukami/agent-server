@@ -9,7 +9,18 @@ import pytest
 # Test the raw implementation function, not the LangChain tool wrapper.
 # This avoids type-checker ambiguity around @tool's return type and keeps
 # tests focused on the search logic rather than the LangChain plumbing.
+import src.agent.tools as tools_module
 from src.agent.tools import _web_search
+
+
+@pytest.fixture(autouse=True)
+def _reset_ddgs_session() -> None:
+    """Reset the module-level DDGS session before each test.
+
+    The web_search tool caches a DDGS instance for session reuse.
+    Each test should start with a fresh session so mocks apply cleanly.
+    """
+    tools_module._ddgs = None
 
 
 class TestWebSearch:
@@ -29,12 +40,35 @@ class TestWebSearch:
         assert len(result) > 0
 
     def test_returns_no_results_message_when_empty(self) -> None:
-        """Empty result list returns the no-results sentinel string."""
+        """Empty result list returns the no-results sentinel after retries."""
         with patch("src.agent.tools.DDGS") as MockDDGS:
-            MockDDGS.return_value.text.return_value = []
-            result = _web_search("xyzzy nonsense query 12345")
+            with patch("src.agent.tools.time") as mock_time:
+                mock_time.sleep = lambda _: None  # skip retry delays
+                MockDDGS.return_value.text.return_value = []
+                result = _web_search("xyzzy nonsense query 12345")
 
         assert "No results found" in result
+
+    def test_retries_empty_results_then_succeeds(self) -> None:
+        """Empty results trigger a retry; second attempt may succeed."""
+        mock_results = [{"body": "Found on retry."}]
+        call_count = 0
+
+        def side_effect(query: str, max_results: int) -> list:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return []  # first attempt empty
+            return mock_results
+
+        with patch("src.agent.tools.DDGS") as MockDDGS:
+            with patch("src.agent.tools.time") as mock_time:
+                mock_time.sleep = lambda _: None
+                MockDDGS.return_value.text.side_effect = side_effect
+                result = _web_search("test query")
+
+        assert "Found on retry" in result
+        assert call_count == 2
 
     def test_returns_no_body_message_when_bodies_empty(self) -> None:
         """Results with no 'body' fields return the no-readable-text sentinel."""
@@ -113,3 +147,18 @@ class TestWebSearch:
 
         assert "First result content" in result
         assert "Second result content" in result
+
+    def test_session_reset_on_rate_limit_error(self) -> None:
+        """DDGS session is reset after a DuckDuckGoSearchException."""
+        from duckduckgo_search.exceptions import DuckDuckGoSearchException
+
+        with patch("src.agent.tools.DDGS") as MockDDGS:
+            with patch("src.agent.tools.time") as mock_time:
+                mock_time.sleep = lambda _: None
+                MockDDGS.return_value.text.side_effect = DuckDuckGoSearchException(
+                    "rate limited"
+                )
+                _web_search("test")
+
+        # After rate limit errors, the session should be cleared
+        assert tools_module._ddgs is None

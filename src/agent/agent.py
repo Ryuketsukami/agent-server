@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Literal
 
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 from langgraph.graph import END, START, StateGraph
@@ -16,6 +16,24 @@ from .config import ModelConfig, load_config
 from .metrics import build_metrics_payload
 from .state import AgentState
 from .tools import web_search
+
+# System prompt for the ReAct agent — guides the LLM to follow a clean
+# Thought → Action → Observation → Answer loop and avoid excessive iterations.
+_SYSTEM_PROMPT = """\
+You are a helpful assistant with access to a web_search tool.
+
+Follow this pattern:
+1. THINK about what information you need to answer the user's question.
+2. Use web_search to find relevant information. Search once with a clear query.
+3. Read the results and formulate your answer.
+4. Provide a clear, concise answer based on what you found.
+
+Rules:
+- Search at most 2 times. If the first search doesn't help, try ONE different query.
+- If search returns no results, answer based on your knowledge and note the limitation.
+- Do NOT repeat the same search query.
+- Keep your final answer concise and directly address the user's question.
+"""
 
 
 class ReactAgent:
@@ -109,6 +127,9 @@ class ReactAgent:
         On the *first* call, also records ``first_token_ns`` as a proxy for
         TTFT (time-to-first-token).  Subsequent calls leave it unchanged.
 
+        Prepends the system prompt to guide the ReAct loop if no system
+        message is already present in the conversation.
+
         Args:
             state: Current graph state.
 
@@ -118,7 +139,12 @@ class ReactAgent:
         # Capture timestamp before LLM call as TTFT proxy (first call only)
         call_start_ns: int = time.monotonic_ns()
 
-        response: AIMessage = self._llm_with_tools.invoke(state["messages"])
+        # Prepend system prompt if not already present
+        messages = state["messages"]
+        if not messages or not isinstance(messages[0], SystemMessage):
+            messages = [SystemMessage(content=_SYSTEM_PROMPT)] + list(messages)
+
+        response: AIMessage = self._llm_with_tools.invoke(messages)
 
         updates: dict = {"messages": [response]}
 
