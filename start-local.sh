@@ -41,6 +41,14 @@ TUNNEL_PID=$!
 
 echo "[2/2] Starting LangGraph server on port $PORT..."
 cd "$SCRIPT_DIR"
+
+# Load .env into the shell so langgraph dev picks up MODEL_BASE_URL etc.
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 langgraph dev --port $PORT --host 0.0.0.0 &
 LANGGRAPH_PID=$!
 

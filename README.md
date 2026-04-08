@@ -230,6 +230,51 @@ OpenRouter applies rate limits per key (typically 60 req/min on free tier, highe
 
 ---
 
+## Updating & Redeployment
+
+What happens when you push code or change config — and what you need to do manually.
+
+### After pushing to `agent-server` (this repo)
+
+| Deployment | What happens | Action needed |
+|---|---|---|
+| **Railway** | Auto-redeploys from `main` branch. New container built and live within ~2 min. | None — fully automatic. |
+| **Vast.ai** | Nothing — the instance only pulls code on boot. | **Restart the instance.** The startup script runs `git clone`/`git pull` on boot, so a restart picks up the latest code. Use the Vast.ai dashboard or `vastai stop instance <ID> && vastai start instance <ID>`. |
+| **Local desktop** | Nothing — you're running from your local checkout. | **Restart `langgraph dev`** (or `start-local.bat`). If you already pulled the changes, just restart the process. |
+
+### After pushing to `portfolio_new` (frontend repo)
+
+| Deployment | What happens | Action needed |
+|---|---|---|
+| **Vercel** | Auto-deploys from `main` branch. Build + deploy takes ~1 min. | None — fully automatic. |
+
+### Environment variable changes
+
+| Where | How to update | Takes effect |
+|---|---|---|
+| **Railway** | Railway dashboard → Service → Variables | Immediately triggers redeploy. |
+| **Vercel** | Vercel dashboard → Project → Settings → Environment Variables | Next deploy (push a commit or trigger manual redeploy). |
+| **Vast.ai** | Vast.ai dashboard → Instance → Edit → Environment | Next instance restart. |
+| **Local** | Edit `.env` file | Next `langgraph dev` restart. |
+
+### Vast.ai schedule (GitHub Actions)
+
+The Vast.ai instance starts and stops automatically via GitHub Actions cron:
+- **Start**: 06:30 Israel time (GMT+2), Sun–Thu (`vast-start.yml`)
+- **Stop**: 17:00 Israel time (GMT+2), Sun–Thu (`vast-stop.yml`)
+
+These workflows require two GitHub Actions secrets: `VAST_API_KEY` and `VAST_INSTANCE_ID`. The instance pulls the latest code from this repo on every start.
+
+### Quick reference
+
+```
+Push backend code  →  Railway: auto   |  Vast.ai: restart instance  |  Local: restart server
+Push frontend code →  Vercel: auto
+Change env vars    →  Railway: auto   |  Vercel: next deploy        |  Vast.ai: restart  |  Local: restart
+```
+
+---
+
 ## SSE Streaming Format
 
 When the frontend proxies a query via `/threads/{id}/runs/stream` with `stream_mode: 'messages'`, LangGraph Server emits these SSE events:
@@ -286,3 +331,17 @@ All external calls (Ollama, DuckDuckGo) are mocked — no network required.
 | Vast.ai | $0.00 per query (~$0.24/hr instance cost) |
 | OpenRouter | ~$0.0005/query at typical query length |
 | Client (Transformers.js) | $0.00 (runs in browser) |
+
+---
+
+## Scaling beyond a portfolio demo
+
+This project uses **Ollama** for self-hosted inference because it's simple to set up and sufficient for a portfolio demo with low concurrency. For a production system requiring higher throughput, the serving layer would change:
+
+- **vLLM** instead of Ollama — purpose-built for high-throughput LLM serving with continuous batching, PagedAttention, and tensor parallelism across multiple GPUs. Ollama is great for single-user or low-concurrency use; vLLM handles dozens of concurrent requests efficiently.
+
+- **FlashAttention / FlashDecoding** — Qwen3 models support FlashAttention 2 natively. vLLM uses it by default when available, significantly reducing memory usage and improving throughput on Ampere+ GPUs (RTX 3090/4090, A100, H100). No code changes needed — vLLM enables it automatically.
+
+- **Speculative decoding** — an alternative optimization where a small draft model proposes tokens and the main model verifies them in parallel. vLLM supports this via `--speculative-model`. Useful when latency matters more than throughput, though it adds memory overhead for the draft model.
+
+The LangGraph agent code and frontend would remain identical — only the `MODEL_BASE_URL` env var changes to point at the vLLM server instead of Ollama, since both expose an OpenAI-compatible API.

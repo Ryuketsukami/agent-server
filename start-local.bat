@@ -40,4 +40,12 @@ echo   Close this window to stop the server.
 echo.
 
 cd /d "%SCRIPT_DIR%"
+
+REM --- Load .env into the shell ---
+if exist "%SCRIPT_DIR%.env" (
+    for /f "usebackq tokens=* delims=" %%A in ("%SCRIPT_DIR%.env") do (
+        set "%%A"
+    )
+)
+
 langgraph dev --port %PORT% --host 0.0.0.0
