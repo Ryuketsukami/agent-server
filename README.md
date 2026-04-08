@@ -82,9 +82,27 @@ agent-server/
 
 ---
 
-## Local setup (resolving Python imports)
+## API Endpoints
 
-Python imports don't resolve in your editor until the package is installed into a virtual environment.
+The LangGraph Server exposes these endpoints:
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/ok` | Health check — returns `{"ok": true}` if server is alive |
+| `GET` | `/info` | Server info — version, runtime edition, feature flags |
+| `GET` | `/docs` | OpenAPI / Swagger documentation |
+| `POST` | `/threads` | Create a new conversation thread |
+| `POST` | `/threads/{id}/runs/stream` | Stream a run on a thread (SSE) |
+| `POST` | `/threads/search` | Search/list threads |
+| `POST` | `/runs/search` | Search/list runs (use `{"status": "busy"}` for active) |
+
+None of these endpoints require authentication by default. For production, consider placing the server behind an API gateway or reverse proxy that restricts access by IP or API key. LangGraph Server supports auth via the `LANGGRAPH_AUTH` config — see [LangGraph docs](https://langchain-ai.github.io/langgraph/).
+
+---
+
+## Local setup
+
+### 1. Python environment
 
 ```bash
 # Create and activate venv
@@ -99,29 +117,52 @@ pip install -e ".[dev]"
 Then in VS Code: **Ctrl+Shift+P → Python: Select Interpreter → .venv**.
 All `src.agent.*` imports will resolve.
 
+### 2. Environment variables
+
+```bash
+cp .env.example .env
+# Edit .env — the defaults already match local Ollama, no changes needed
+```
+
+### 3. Start Ollama
+
+```bash
+# Start Ollama with 3 parallel slots (run once; keep terminal open)
+OLLAMA_NUM_PARALLEL=3 ollama serve
+
+# Pull the model (one-time, ~5 GB download)
+ollama pull qwen3:8b
+```
+
+### 4. Run the server
+
+**Option A — One command (Windows):**
+
+```cmd
+start-local.bat
+```
+
+This starts both the Cloudflare tunnel and the LangGraph server.
+
+**Option B — Manual:**
+
+```bash
+# Terminal 1: Cloudflare tunnel
+cloudflared tunnel run --url http://localhost:8123 local-agent
+
+# Terminal 2: LangGraph server
+langgraph dev --port 8123 --host 0.0.0.0
+```
+
+The tunnel URL (or `https://agent-local.mevmav.com` if configured) is what you set as `NUXT_LOCAL_AGENT_URL` in Vercel.
+
 ---
 
 ## Running each deployment
 
 ### Local (desktop)
 
-```bash
-# 1. Start Ollama with 3 parallel slots (run once; keep terminal open)
-OLLAMA_NUM_PARALLEL=3 ollama serve
-
-# 2. Pull the model (one-time, ~5 GB download)
-ollama pull qwen3:8b
-
-# 3. Copy and fill the env file
-cp .env.example .env
-# Edit .env — the defaults already match local Ollama, no changes needed
-
-# 4. Start the agent server with a Cloudflare Tunnel
-langgraph dev --port 8123 --tunnel --max-concurrent-runs 3
-# The tunnel URL is printed — set it as NUXT_LOCAL_AGENT_URL in Vercel
-```
-
-For a stable tunnel URL that survives restarts, run `cloudflared` as a system service pointing to port 8123.
+See [Local setup](#local-setup) above.
 
 ---
 
@@ -192,7 +233,8 @@ OpenRouter applies rate limits per key (typically 60 req/min on free tier, highe
 Each column header shows how many sessions are currently active on that server, fetched every 10 seconds:
 
 ```
-GET {AGENT_URL}/runs?status=running
+GET  {FRONTEND_URL}/api/agent/sessions/{deployment}
+# internally calls: GET {AGENT_URL}/ok + POST {AGENT_URL}/runs/search
 ```
 
 This lets visitors see at a glance whether slower inference is due to shared load (Ollama is capped at `OLLAMA_NUM_PARALLEL=3`).
