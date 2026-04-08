@@ -88,6 +88,10 @@ pip install -e . --quiet
 
 # ── 7. Start LangGraph agent server ──────────────────────────────────────────
 echo "[startup] Starting LangGraph Server on 0.0.0.0:8123..."
+# Export .env vars into the shell so langgraph dev picks them up at import time.
+set -a
+source .env
+set +a
 # langgraph dev runs the graph directly in the current Python env (no Docker
 # needed), which is correct for Vast.ai where we're already inside a container.
 langgraph dev \
