@@ -93,8 +93,7 @@ echo "[startup] Starting LangGraph Server on 0.0.0.0:8123..."
 langgraph dev \
     --port 8123 \
     --host 0.0.0.0 \
-    --no-browser \
-    --max-concurrent-runs 3
+    --no-reload
 
 # Cleanup on exit
 kill "$OLLAMA_PID" 2>/dev/null || true
