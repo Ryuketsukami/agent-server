@@ -1,4 +1,4 @@
-"""ReactAgent: a LangGraph-based ReAct agent using DuckDuckGo web search."""
+"""ReactAgent: a LangGraph-based ReAct agent using Tavily web search."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ class ReactAgent:
 
     Wraps a LangGraph ``StateGraph`` that executes the classic ReAct pattern:
 
-    1. **agent** node  — calls the LLM (with DuckDuckGo bound as a tool).
+    1. **agent** node  — calls the LLM (with Tavily search bound as a tool).
     2. **tools** node  — executes any requested tool calls.
     3. Loop until the LLM produces a final answer (no tool calls).
     4. **finalize** node — appends a ``metrics`` event to the message stream.

@@ -323,6 +323,21 @@ All external calls (Ollama, DuckDuckGo) are mocked — no network required.
 
 ---
 
+## Search provider: why Tavily
+
+The ReAct agent needs a web search tool. We evaluated four providers and chose **Tavily**.
+
+| Provider | Verdict | Reason |
+|---|---|---|
+| **DuckDuckGo** (`duckduckgo-search`) | Rejected | No official API — the Python library scrapes HTML endpoints, which triggers aggressive rate limiting and bot detection. Both local and Railway deployments returned empty results under normal load. Unreliable for a live demo. |
+| **Brave Search** | Rejected | Solid free tier (2,000 queries/month), but returns raw JSON that requires extra parsing to produce clean text for the LLM. General-purpose search, not optimized for AI agent consumption. |
+| **Jina AI** (`s.jina.ai`) | Rejected | Good markdown output, but recently moved from free to auth-required. More of a "reader" (URL → markdown) than a search engine — the search endpoint is a secondary feature and less reliable. |
+| **Tavily** | **Selected** | Purpose-built for AI agents. Returns clean, LLM-optimized text out of the box. Widely adopted in the LangChain/LangGraph ecosystem. 1,000 searches/month free tier — more than enough for a portfolio demo. Simple REST API, no scraping, no bot detection issues. |
+
+Both the server agents (Python `httpx` → Tavily API) and the browser agent (Nitro proxy → Tavily API) use the same Tavily key. Set `TAVILY_API_KEY` in the backend `.env` and `NUXT_TAVILY_API_KEY` in Vercel for the frontend.
+
+---
+
 ## Cost reference
 
 | Deployment | Model cost |

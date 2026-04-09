@@ -25,6 +25,7 @@
 #
 # Vast.ai environment variables (set in instance dashboard → Environment):
 #   MODEL_NAME              qwen3:8b
+#   TAVILY_API_KEY          tvly-... (free at https://tavily.com)
 #   OPENROUTER_REFERER      (leave blank for Vast.ai deployment)
 #   OPENROUTER_TITLE        (leave blank for Vast.ai deployment)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,6 +80,7 @@ COST_PER_INPUT_TOKEN=0.0
 COST_PER_OUTPUT_TOKEN=0.0
 OPENROUTER_REFERER=
 OPENROUTER_TITLE=
+TAVILY_API_KEY=${TAVILY_API_KEY:-}
 MAX_CONCURRENT_RUNS=3
 EOF
 

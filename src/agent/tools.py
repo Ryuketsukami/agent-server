@@ -1,37 +1,34 @@
-"""Agent tools: DuckDuckGo web search with Markdownify post-processing."""
+"""Agent tools: Tavily web search for the ReAct agent."""
 
 from __future__ import annotations
 
+import os
 import time
 
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import DuckDuckGoSearchException
+import httpx
 from langchain_core.tools import tool
-from markdownify import markdownify
 
 _MAX_RESULTS: int = 5
 _MAX_ATTEMPTS: int = 3
-_RETRY_DELAY_SEC: float = 1.5
+_RETRY_DELAY_SEC: float = 1.0
+_TAVILY_URL = "https://api.tavily.com/search"
 
-# Module-level DDGS session — reused across calls to avoid rate limiting.
-# DuckDuckGo rate-limits new sessions aggressively; reusing the session
-# keeps the same cookies/tokens and avoids triggering empty results.
-_ddgs: DDGS | None = None
+# Reusable httpx client — avoids connection setup overhead per search.
+_client: httpx.Client | None = None
 
 
-def _get_ddgs() -> DDGS:
-    """Return a cached DDGS session, creating one on first use."""
-    global _ddgs  # noqa: PLW0603
-    if _ddgs is None:
-        _ddgs = DDGS()
-    return _ddgs
+def _get_client() -> httpx.Client:
+    """Return a cached httpx client, creating one on first use."""
+    global _client  # noqa: PLW0603
+    if _client is None:
+        _client = httpx.Client(timeout=15.0)
+    return _client
 
 
 def _web_search(query: str) -> str:
-    """Search the web using DuckDuckGo and return clean Markdown text.
+    """Search the web using Tavily and return clean text results.
 
-    Retries up to three times with exponential back-off on rate limit errors
-    AND on empty results (DuckDuckGo sometimes returns empty sets under load).
+    Retries up to three times with back-off on transient errors.
     Returns a human-readable error string rather than raising so the agent
     can reason about the failure and try a different query.
 
@@ -39,45 +36,60 @@ def _web_search(query: str) -> str:
         query: Natural-language search query.
 
     Returns:
-        Markdown-formatted concatenation of the top result bodies, or an
-        error message string if all attempts fail.
+        Concatenated result text, or an error message string if all
+        attempts fail.
     """
-    global _ddgs  # noqa: PLW0603
+    api_key = os.environ.get("TAVILY_API_KEY", "")
+    if not api_key:
+        return "Web search unavailable: TAVILY_API_KEY not configured."
 
     for attempt in range(_MAX_ATTEMPTS):
         try:
-            results: list[dict] = _get_ddgs().text(query, max_results=_MAX_RESULTS)
+            resp = _get_client().post(
+                _TAVILY_URL,
+                json={
+                    "api_key": api_key,
+                    "query": query,
+                    "max_results": _MAX_RESULTS,
+                    "include_answer": False,
+                },
+            )
+
+            if resp.status_code == 429:
+                # Rate limited — retry after delay
+                if attempt < _MAX_ATTEMPTS - 1:
+                    time.sleep(_RETRY_DELAY_SEC * (attempt + 1))
+                    continue
+                return "Search temporarily unavailable (rate limited)."
+
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
 
             if not results:
-                # Empty results may be transient (rate limiting) — retry
                 if attempt < _MAX_ATTEMPTS - 1:
                     time.sleep(_RETRY_DELAY_SEC * (attempt + 1))
                     continue
                 return "No results found for this query."
 
-            bodies: list[str] = [r["body"] for r in results if r.get("body")]
+            bodies: list[str] = [r["content"] for r in results if r.get("content")]
             if not bodies:
                 return "Results returned but contained no readable text."
 
-            raw: str = "\n\n".join(bodies)
-            return markdownify(raw)
+            return "\n\n".join(bodies)
 
-        except DuckDuckGoSearchException as exc:
-            # Reset the session on errors — the old session may be poisoned
-            _ddgs = None
+        except httpx.HTTPStatusError as exc:
             if attempt < _MAX_ATTEMPTS - 1:
                 time.sleep(_RETRY_DELAY_SEC * (attempt + 1))
             else:
                 return (
-                    f"Search temporarily unavailable after {_MAX_ATTEMPTS} attempts "
-                    f"(rate limited): {exc}"
+                    f"Search temporarily unavailable after {_MAX_ATTEMPTS} attempts: "
+                    f"{exc.response.status_code}"
                 )
 
         except Exception as exc:  # noqa: BLE001
-            # Surface unexpected errors as text so the agent can acknowledge them
             return f"Unexpected search error: {exc}"
 
-    # Unreachable — loop above always returns or exhausts retries
     return "Search failed after all retries."
 
 

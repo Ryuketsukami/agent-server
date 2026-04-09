@@ -11,9 +11,7 @@ dependencies = [
     "langgraph>=0.2",
     "langgraph-cli[inmem]>=0.1",
     "langchain-openai>=0.2",
-    "duckduckgo-search>=6.0",
-    "markdownify>=0.11",
-    "httpx>=0.27",       # used by langgraph client
+    "httpx>=0.27",       # used by langgraph client + Tavily search
 ]
 
 [project.optional-dependencies]
