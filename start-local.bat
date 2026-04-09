@@ -7,7 +7,6 @@ REM   - Ollama installed and running (ollama pull qwen3:8b)
 REM   - Cloudflare tunnel "local-agent" created
 REM   - Python venv at portfolio\backend\.venv with langgraph-cli installed
 
-setlocal
 set SCRIPT_DIR=%~dp0
 set PORT=8123
 set CLOUDFLARED=C:\Program Files (x86)\cloudflared\cloudflared.exe
@@ -41,9 +40,9 @@ echo.
 
 cd /d "%SCRIPT_DIR%"
 
-REM --- Load .env into the shell ---
+REM --- Load .env into the shell (skip comments and blank lines) ---
 if exist "%SCRIPT_DIR%.env" (
-    for /f "usebackq tokens=* delims=" %%A in ("%SCRIPT_DIR%.env") do (
+    for /f "usebackq eol=# tokens=* delims=" %%A in ("%SCRIPT_DIR%.env") do (
         set "%%A"
     )
 )
