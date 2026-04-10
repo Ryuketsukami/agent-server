@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +20,7 @@ def mock_config() -> ModelConfig:
     """Minimal ModelConfig that avoids real env-var reads."""
     return ModelConfig(
         base_url="http://localhost:11434/v1",
-        model_name="qwen3:8b",
+        model_name=os.environ.get("MODEL_NAME", "qwen3:8b"),
         api_key="ollama",
         cost_per_input_token=0.0,
         cost_per_output_token=0.0,

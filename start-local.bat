@@ -10,12 +10,13 @@ REM   - Python venv at portfolio\backend\.venv with langgraph-cli installed
 set SCRIPT_DIR=%~dp0
 set PORT=8123
 set CLOUDFLARED=C:\Program Files (x86)\cloudflared\cloudflared.exe
+if "%MODEL_NAME%"=="" set MODEL_NAME=qwen3:8b
 
 REM --- Preflight: check Ollama model ---
-ollama list 2>nul | findstr /C:"qwen3:8b" >nul
+ollama list 2>nul | findstr /C:"%MODEL_NAME%" >nul
 if errorlevel 1 (
-    echo [WARN] qwen3:8b not found — pulling now...
-    ollama pull qwen3:8b
+    echo [WARN] %MODEL_NAME% not found — pulling now...
+    ollama pull %MODEL_NAME%
 )
 
 REM --- Activate venv ---

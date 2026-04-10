@@ -19,9 +19,11 @@ if ! command -v ollama &>/dev/null; then
   echo "[ERROR] Ollama not found in PATH." >&2; exit 1
 fi
 
-if ! ollama list 2>/dev/null | grep -q "qwen3:8b"; then
-  echo "[WARN] qwen3:8b not found — pulling now..."
-  ollama pull qwen3:8b
+MODEL_NAME="${MODEL_NAME:-qwen3:8b}"
+
+if ! ollama list 2>/dev/null | grep -q "$MODEL_NAME"; then
+  echo "[WARN] $MODEL_NAME not found — pulling now..."
+  ollama pull "$MODEL_NAME"
 fi
 
 if [ ! -f "$VENV" ]; then
