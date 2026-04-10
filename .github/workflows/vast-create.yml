@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   create:
-    name: Create Vast.ai GPU instance from template
+    name: Create Vast.ai GPU instance
     runs-on: ubuntu-latest
     steps:
       - name: Install vastai CLI
@@ -21,7 +21,8 @@ jobs:
         env:
           VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
           EXISTING_INSTANCE_ID: ${{ vars.VAST_INSTANCE_ID }}
-          TEMPLATE_HASH: 63cc40ca54185cf3cc6379d2ea47fc2c
+          LANGCHAIN_API_KEY: ${{ secrets.LANGCHAIN_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
@@ -64,10 +65,22 @@ jobs:
           print(f\"  GPU: {o.get('gpu_name','?')}  VRAM: {o.get('gpu_ram','?')}GB  Cost: \${o.get('dph_total',0):.4f}/hr\")
           " 2>/dev/null || true
 
-          # ── Create instance from template ───────────────────────────────────
-          echo "Creating instance from template $TEMPLATE_HASH..."
+          # ── Create instance ─────────────────────────────────────────────────
+          echo "Creating instance on offer $OFFER_ID..."
           CREATE_RESULT=$(vastai create instance "$OFFER_ID" \
-            --template_hash "$TEMPLATE_HASH" --raw)
+            --image vastai/pytorch:@vastai-automatic-tag \
+            --env "-p 8123:8123 \
+                   -e OPEN_BUTTON_PORT=8123 \
+                   -e OPEN_BUTTON_TOKEN=1 \
+                   -e MODEL_NAME=qwen3:8b \
+                   -e LANGCHAIN_TRACING_V2=true \
+                   -e LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY} \
+                   -e TAVILY_API_KEY=${TAVILY_API_KEY}" \
+            --onstart-cmd 'curl -fsSL https://raw.githubusercontent.com/Ryuketsukami/agent-server/main/startup.sh | bash' \
+            --disk 40 \
+            --ssh \
+            --direct \
+            --raw)
 
           INSTANCE_ID=$(echo "$CREATE_RESULT" | python3 -c "
           import sys, json
