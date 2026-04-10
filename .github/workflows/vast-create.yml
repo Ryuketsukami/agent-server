@@ -1,0 +1,91 @@
+name: Vast.ai — Create instance
+
+on:
+  schedule:
+    # 06:20 AM Israel time (GMT+2), Sunday through Thursday (10 min early to warm up)
+    - cron: "20 4 * * 0-4"
+  workflow_dispatch:
+
+permissions:
+  actions: write  # needed to update the VAST_INSTANCE_ID repo variable
+
+jobs:
+  create:
+    name: Create Vast.ai GPU instance from template
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install vastai CLI
+        run: pip install vastai --quiet
+
+      - name: Find cheapest offer and create instance
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          TEMPLATE_HASH: 63cc40ca54185cf3cc6379d2ea47fc2c
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          vastai set api-key "$VAST_API_KEY"
+
+          echo "Searching for cheapest offer matching template..."
+          SEARCH_RESULT=$(vastai search offers \
+            'verified=true reliability>0.90 inet_down>100 num_gpus=1' \
+            --order 'dph_total asc' --limit 5 --raw)
+
+          OFFER_ID=$(echo "$SEARCH_RESULT" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          offers = data.get('offers', [])
+          if not offers:
+              print('ERROR: no offers found', file=sys.stderr)
+              sys.exit(1)
+          print(offers[0]['id'])
+          ")
+
+          echo "Cheapest offer ID: $OFFER_ID"
+          DPH=$(echo "$SEARCH_RESULT" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          print(f\"\${data['offers'][0]['dph_total']:.4f}/hr\")
+          " 2>/dev/null || echo "unknown")
+          echo "Cost: \$$DPH"
+
+          echo "Creating instance from template $TEMPLATE_HASH..."
+          CREATE_RESULT=$(vastai create instance "$OFFER_ID" \
+            --template_hash "$TEMPLATE_HASH" --raw)
+
+          INSTANCE_ID=$(echo "$CREATE_RESULT" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          if not d.get('success'):
+              print('ERROR: create failed:', d, file=sys.stderr)
+              sys.exit(1)
+          print(d['new_contract'])
+          ")
+
+          echo "Created instance ID: $INSTANCE_ID"
+
+          # Store the new instance ID in a GitHub Actions repo variable so the
+          # destroy workflow can find it (ID changes every time we create fresh).
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GH_REPO/actions/variables/VAST_INSTANCE_ID" \
+            -d "{\"name\":\"VAST_INSTANCE_ID\",\"value\":\"$INSTANCE_ID\"}")
+
+          if [ "$HTTP_CODE" = "404" ]; then
+            # Variable doesn't exist yet — create it
+            curl -s -f \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GH_REPO/actions/variables" \
+              -d "{\"name\":\"VAST_INSTANCE_ID\",\"value\":\"$INSTANCE_ID\"}"
+            echo "Variable VAST_INSTANCE_ID created."
+          elif [ "$HTTP_CODE" = "204" ]; then
+            echo "Variable VAST_INSTANCE_ID updated."
+          else
+            echo "WARNING: unexpected HTTP $HTTP_CODE when storing instance ID."
+          fi
+
+          echo "Done. Instance $INSTANCE_ID is spinning up."

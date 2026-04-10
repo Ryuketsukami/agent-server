@@ -1,0 +1,47 @@
+name: Vast.ai — Destroy instance
+
+on:
+  schedule:
+    # 05:00 PM Israel time (GMT+2), Sunday through Thursday
+    - cron: "0 15 * * 0-4"
+  workflow_dispatch:
+
+permissions:
+  actions: write  # needed to clear the VAST_INSTANCE_ID repo variable after destroy
+
+jobs:
+  destroy:
+    name: Destroy Vast.ai GPU instance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install vastai CLI
+        run: pip install vastai --quiet
+
+      - name: Destroy instance
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          VAST_INSTANCE_ID: ${{ vars.VAST_INSTANCE_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$VAST_INSTANCE_ID" ]; then
+            echo "No VAST_INSTANCE_ID variable set — nothing to destroy."
+            exit 0
+          fi
+
+          vastai set api-key "$VAST_API_KEY"
+
+          echo "Destroying instance $VAST_INSTANCE_ID..."
+          vastai destroy instance "$VAST_INSTANCE_ID"
+          echo "Instance $VAST_INSTANCE_ID destroyed."
+
+          # Clear the stored instance ID so a stale value can't accidentally
+          # be used to destroy a future instance.
+          curl -s -f \
+            -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GH_REPO/actions/variables/VAST_INSTANCE_ID" \
+            -d '{"name":"VAST_INSTANCE_ID","value":""}' || true
+
+          echo "VAST_INSTANCE_ID variable cleared."
