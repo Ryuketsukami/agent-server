@@ -1,0 +1,41 @@
+name: Vast.ai — Redeploy on push
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - ".env*.example"
+      - "project1-spec.md"
+
+jobs:
+  redeploy:
+    name: Reboot Vast.ai instance if running
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install vastai CLI
+        run: pip install vastai --quiet
+
+      - name: Reboot instance if running
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          VAST_INSTANCE_ID: ${{ vars.VAST_INSTANCE_ID }}
+        run: |
+          if [ -z "$VAST_INSTANCE_ID" ]; then
+            echo "No VAST_INSTANCE_ID set — no instance to redeploy. Skipping."
+            exit 0
+          fi
+
+          vastai set api-key "$VAST_API_KEY"
+
+          STATUS=$(vastai show instance "$VAST_INSTANCE_ID" --raw 2>/dev/null | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('actual_status','unknown'))" 2>/dev/null || echo "gone")
+
+          if [ "$STATUS" = "gone" ] || [ "$STATUS" = "unknown" ]; then
+            echo "Instance $VAST_INSTANCE_ID is not running (status: $STATUS). Nothing to reboot."
+            exit 0
+          fi
+
+          echo "Instance $VAST_INSTANCE_ID is running (status: $STATUS). Rebooting to pick up latest changes..."
+          vastai reboot instance "$VAST_INSTANCE_ID"
+          echo "Reboot issued. Instance will re-run startup.sh from main."
