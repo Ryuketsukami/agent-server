@@ -20,15 +20,30 @@ jobs:
       - name: Find cheapest offer and create instance
         env:
           VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          EXISTING_INSTANCE_ID: ${{ vars.VAST_INSTANCE_ID }}
           TEMPLATE_HASH: 63cc40ca54185cf3cc6379d2ea47fc2c
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           vastai set api-key "$VAST_API_KEY"
 
-          echo "Searching for cheapest offer matching template..."
+          # ── Guard: skip if an instance is already running ──────────────────
+          if [ -n "$EXISTING_INSTANCE_ID" ]; then
+            echo "VAST_INSTANCE_ID is set ($EXISTING_INSTANCE_ID) — checking if it's still alive..."
+            STATUS=$(vastai show instance "$EXISTING_INSTANCE_ID" --raw 2>/dev/null | \
+              python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('actual_status','unknown'))" 2>/dev/null || echo "gone")
+
+            if [ "$STATUS" != "gone" ] && [ "$STATUS" != "unknown" ]; then
+              echo "Instance $EXISTING_INSTANCE_ID is already up (status: $STATUS). Nothing to do."
+              exit 0
+            fi
+            echo "Instance $EXISTING_INSTANCE_ID is gone (status: $STATUS). Creating a fresh one."
+          fi
+
+          # ── Search for cheapest offer with required specs ───────────────────
+          echo "Searching for cheapest offer (min 40GB VRAM, verified, reliable)..."
           SEARCH_RESULT=$(vastai search offers \
-            'verified=true reliability>0.90 inet_down>100 num_gpus=1' \
+            'verified=true reliability>0.90 inet_down>100 num_gpus=1 gpu_ram>=40' \
             --order 'dph_total asc' --limit 5 --raw)
 
           OFFER_ID=$(echo "$SEARCH_RESULT" | python3 -c "
@@ -36,19 +51,20 @@ jobs:
           data = json.load(sys.stdin)
           offers = data.get('offers', [])
           if not offers:
-              print('ERROR: no offers found', file=sys.stderr)
+              print('ERROR: no offers found matching criteria', file=sys.stderr)
               sys.exit(1)
           print(offers[0]['id'])
           ")
 
           echo "Cheapest offer ID: $OFFER_ID"
-          DPH=$(echo "$SEARCH_RESULT" | python3 -c "
+          echo "$SEARCH_RESULT" | python3 -c "
           import sys, json
           data = json.load(sys.stdin)
-          print(f\"\${data['offers'][0]['dph_total']:.4f}/hr\")
-          " 2>/dev/null || echo "unknown")
-          echo "Cost: \$$DPH"
+          o = data['offers'][0]
+          print(f\"  GPU: {o.get('gpu_name','?')}  VRAM: {o.get('gpu_ram','?')}GB  Cost: \${o.get('dph_total',0):.4f}/hr\")
+          " 2>/dev/null || true
 
+          # ── Create instance from template ───────────────────────────────────
           echo "Creating instance from template $TEMPLATE_HASH..."
           CREATE_RESULT=$(vastai create instance "$OFFER_ID" \
             --template_hash "$TEMPLATE_HASH" --raw)
@@ -64,8 +80,7 @@ jobs:
 
           echo "Created instance ID: $INSTANCE_ID"
 
-          # Store the new instance ID in a GitHub Actions repo variable so the
-          # destroy workflow can find it (ID changes every time we create fresh).
+          # ── Store new instance ID in GitHub Actions repo variable ───────────
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -X PATCH \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -74,7 +89,6 @@ jobs:
             -d "{\"name\":\"VAST_INSTANCE_ID\",\"value\":\"$INSTANCE_ID\"}")
 
           if [ "$HTTP_CODE" = "404" ]; then
-            # Variable doesn't exist yet — create it
             curl -s -f \
               -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
