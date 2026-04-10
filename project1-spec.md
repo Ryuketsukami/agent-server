@@ -176,6 +176,7 @@ llm = ChatOpenAI(
     model=os.environ["MODEL_NAME"],          # e.g. "qwen3:8b"
     base_url=os.environ["MODEL_BASE_URL"],   # e.g. "http://localhost:11434/v1"
     api_key=os.environ["MODEL_API_KEY"],     # "ollama" for local, real key for OpenRouter
+    extra_body={"enable_thinking": True}
     streaming=True,
 )
 ```

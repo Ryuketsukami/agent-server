@@ -93,6 +93,7 @@ class ReactAgent:
             model=self._config.model_name,
             base_url=self._config.base_url,
             api_key=SecretStr(self._config.api_key),
+            extra_body={"enable_thinking": True},
             streaming=True,
             default_headers=extra_headers or None,
         )
